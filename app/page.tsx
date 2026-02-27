@@ -42,7 +42,18 @@ export default function Home() {
       <footer className="mt-16 border-t border-zinc-800 pt-8 text-xs text-zinc-600">
         <div className="flex flex-col gap-2 sm:flex-row sm:justify-between">
           <span>No accounts. No tracking. IPs are hashed and never stored.</span>
-          <span>1 check per IP per hour to prevent spam.</span>
+          <div className="flex items-center gap-3">
+            <span>1 check per IP per hour to prevent spam.</span>
+            <span>·</span>
+            <a
+              href="https://x.com/saasbyMohd"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-zinc-500 transition-colors hover:text-zinc-300"
+            >
+              by @saasbyMohd
+            </a>
+          </div>
         </div>
       </footer>
     </main>
