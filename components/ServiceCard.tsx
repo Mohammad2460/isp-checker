@@ -32,24 +32,22 @@ export default function ServiceCard({ name, icon, state, responseTimeMs }: Servi
   };
 
   return (
-    <div
-      className={`rounded-lg border p-4 transition-all duration-300 ${stateStyles[state]}`}
-    >
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-xl">{icon}</span>
-          <span className="text-sm font-medium text-zinc-200">{name}</span>
+    <div className={`rounded-lg border p-3 transition-all duration-300 sm:p-4 ${stateStyles[state]}`}>
+      <div className="flex items-start justify-between gap-1">
+        <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
+          <span className="shrink-0 text-base sm:text-xl">{icon}</span>
+          <span className="truncate text-xs font-medium text-zinc-200 sm:text-sm">{name}</span>
         </div>
-        <span className={`text-lg font-bold ${statusColor[state]}`}>
+        <span className={`shrink-0 text-base font-bold sm:text-lg ${statusColor[state]}`}>
           {statusIcon[state]}
         </span>
       </div>
-      <div className="mt-2 text-xs">
+      <div className="mt-1.5 text-xs sm:mt-2">
         {state === 'idle' && <span className="text-zinc-600">not checked</span>}
         {state === 'checking' && <span className="text-zinc-400">checking...</span>}
         {state === 'ok' && (
           <span className="text-emerald-500">
-            accessible{responseTimeMs != null ? ` · ${responseTimeMs}ms` : ''}
+            ok{responseTimeMs != null ? ` · ${responseTimeMs}ms` : ''}
           </span>
         )}
         {state === 'blocked' && <span className="text-red-500">blocked</span>}

@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react';
 import ServiceCard, { CardState } from './ServiceCard';
 import { SERVICES } from '@/lib/services';
-import { runAllChecks, CheckResult } from '@/lib/detect';
+import { runAllChecks } from '@/lib/detect';
 
 interface ISPInfo {
   isp: string;
@@ -28,7 +28,6 @@ export default function ServiceChecker() {
     setIspInfo(null);
     setRateLimited(false);
 
-    // Reset all cards to checking
     setCardStates(Object.fromEntries(SERVICES.map((s) => [s.name, 'checking'])));
     setResponseTimes({});
 
@@ -37,7 +36,6 @@ export default function ServiceChecker() {
       setResponseTimes((prev) => ({ ...prev, [name]: result.responseTimeMs }));
     });
 
-    // Submit results to server
     try {
       const res = await fetch('/api/submit', {
         method: 'POST',
@@ -63,7 +61,7 @@ export default function ServiceChecker() {
   const blockedCount = Object.values(cardStates).filter((s) => s === 'blocked').length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* ISP Banner */}
       {ispInfo && (
         <div className="rounded-lg border border-blue-700 bg-blue-950/40 px-4 py-3 text-sm text-blue-300">
@@ -87,8 +85,8 @@ export default function ServiceChecker() {
         </div>
       )}
 
-      {/* Service Grid */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      {/* Service Grid — 2 cols mobile, 3 tablet, 5 desktop */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5">
         {SERVICES.map((service) => (
           <ServiceCard
             key={service.name}
@@ -107,7 +105,9 @@ export default function ServiceChecker() {
             <span className="text-emerald-400 font-medium">All services accessible ✓</span>
           ) : (
             <>
-              <span className="text-red-400 font-medium">{blockedCount} service{blockedCount > 1 ? 's' : ''} blocked</span>
+              <span className="text-red-400 font-medium">
+                {blockedCount} service{blockedCount > 1 ? 's' : ''} blocked
+              </span>
               <span className="text-zinc-500"> · </span>
               <span className="text-emerald-400">{SERVICES.length - blockedCount} accessible</span>
             </>
@@ -115,11 +115,11 @@ export default function ServiceChecker() {
         </div>
       )}
 
-      {/* Check Button */}
+      {/* Check Button — tall tap target on mobile */}
       <button
         onClick={runCheck}
         disabled={isChecking}
-        className="w-full rounded-lg bg-indigo-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+        className="w-full rounded-lg bg-indigo-600 px-6 py-4 text-base font-semibold text-white transition-colors hover:bg-indigo-500 active:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 sm:py-3 sm:text-sm"
       >
         {isChecking ? 'Checking...' : 'Check My Connection'}
       </button>

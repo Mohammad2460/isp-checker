@@ -4,6 +4,7 @@ import { SpeedInsights } from '@vercel/speed-insights/next';
 import './globals.css';
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://isp-checker.vercel.app'),
   title: 'ISP Checker — Which dev services are blocked in India?',
   description:
     'Find out which backend services (Supabase, Firebase, AWS, etc.) your Indian ISP is blocking. Crowdsourced real-time data from developers across India.',

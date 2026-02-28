@@ -60,7 +60,6 @@ export default function LiveDashboard() {
     setStats(data.stats);
     setTotalChecks(data.totalChecks);
 
-    // Derive ISP list from full unfiltered fetch
     if (!isp) {
       const unique = [...new Set((data.stats as StatRow[]).map((r) => r.isp))].sort();
       setIsps(unique);
@@ -68,29 +67,20 @@ export default function LiveDashboard() {
     setLoading(false);
   }, []);
 
-  // Initial load
   useEffect(() => {
     fetchStats(selectedIsp);
   }, [selectedIsp, fetchStats]);
 
-  // Supabase Realtime subscription
   useEffect(() => {
     const supabase = createBrowserClient();
     const channel = supabase
       .channel('checks-realtime')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'checks' },
-        () => {
-          // Refetch stats when new data arrives
-          fetchStats(selectedIsp);
-        }
-      )
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'checks' }, () => {
+        fetchStats(selectedIsp);
+      })
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [selectedIsp, fetchStats]);
 
   return (
@@ -101,15 +91,46 @@ export default function LiveDashboard() {
           <span className="font-semibold text-zinc-200">{totalChecks.toLocaleString()}</span>{' '}
           checks in the last 24 hours
           <span className="ml-2 inline-flex items-center gap-1 text-xs text-emerald-500">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500"></span>
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
             live
           </span>
         </div>
         <ISPFilter isps={isps} selected={selectedIsp} onChange={setSelectedIsp} />
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto rounded-lg border border-zinc-700">
+      {/* Mobile: card list */}
+      <div className="block sm:hidden">
+        {loading ? (
+          <div className="rounded-lg border border-zinc-700 px-4 py-8 text-center text-sm text-zinc-500">
+            Loading...
+          </div>
+        ) : stats.length === 0 ? (
+          <div className="rounded-lg border border-zinc-700 px-4 py-8 text-center text-sm text-zinc-500">
+            No data yet — be the first to check your connection!
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {stats.map((row, i) => (
+              <div
+                key={`${row.service_name}-${row.isp}-${i}`}
+                className="rounded-lg border border-zinc-700 bg-zinc-800/30 p-3"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium text-zinc-200">{row.service_name}</span>
+                  <BlockedBadge pct={Number(row.blocked_pct)} />
+                </div>
+                <div className="mt-1.5 flex items-center justify-between text-xs text-zinc-500">
+                  <span className="truncate max-w-[200px]">{row.isp}</span>
+                  <span>{timeAgo(row.last_checked)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Desktop: table */}
+      <div className="hidden sm:block overflow-x-auto rounded-lg border border-zinc-700">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-zinc-700 bg-zinc-800/80">
@@ -123,9 +144,7 @@ export default function LiveDashboard() {
           <tbody className="divide-y divide-zinc-800">
             {loading ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-zinc-500">
-                  Loading...
-                </td>
+                <td colSpan={5} className="px-4 py-8 text-center text-zinc-500">Loading...</td>
               </tr>
             ) : stats.length === 0 ? (
               <tr>
@@ -141,9 +160,7 @@ export default function LiveDashboard() {
                 >
                   <td className="px-4 py-3 font-medium text-zinc-200">{row.service_name}</td>
                   <td className="px-4 py-3 text-zinc-400">{row.isp}</td>
-                  <td className="px-4 py-3">
-                    <BlockedBadge pct={Number(row.blocked_pct)} />
-                  </td>
+                  <td className="px-4 py-3"><BlockedBadge pct={Number(row.blocked_pct)} /></td>
                   <td className="px-4 py-3 text-zinc-400">{row.total_checks}</td>
                   <td className="px-4 py-3 text-zinc-500">{timeAgo(row.last_checked)}</td>
                 </tr>
