@@ -4,7 +4,15 @@ import { useEffect, useState, useCallback } from 'react';
 import { createBrowserClient } from '@/lib/supabase';
 import ISPFilter from './ISPFilter';
 
-interface StatRow {
+interface ServiceStatRow {
+  service_name: string;
+  total_checks: number;
+  blocked_count: number;
+  blocked_pct: number;
+  last_checked: string;
+}
+
+interface IspStatRow {
   service_name: string;
   isp: string;
   total_checks: number;
@@ -13,25 +21,37 @@ interface StatRow {
   last_checked: string;
 }
 
+type Tab = 'service' | 'isp';
+
 function BlockedBadge({ pct }: { pct: number }) {
-  if (pct >= 50) {
+  if (pct >= 50)
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-red-950 px-2 py-0.5 text-xs font-medium text-red-400">
         🔴 {pct}%
       </span>
     );
-  }
-  if (pct >= 10) {
+  if (pct >= 10)
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-yellow-950 px-2 py-0.5 text-xs font-medium text-yellow-400">
         🟡 {pct}%
       </span>
     );
-  }
   return (
     <span className="inline-flex items-center gap-1 rounded-full bg-emerald-950 px-2 py-0.5 text-xs font-medium text-emerald-400">
       🟢 {pct}%
     </span>
+  );
+}
+
+function BlockedBar({ pct }: { pct: number }) {
+  const color = pct >= 50 ? 'bg-red-500' : pct >= 10 ? 'bg-yellow-500' : 'bg-emerald-500';
+  return (
+    <div className="flex items-center gap-2">
+      <div className="h-1.5 w-20 overflow-hidden rounded-full bg-zinc-700 sm:w-28">
+        <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.min(pct, 100)}%` }} />
+      </div>
+      <span className="text-xs text-zinc-400">{pct}%</span>
+    </div>
   );
 }
 
@@ -45,31 +65,45 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
+function EmptyState() {
+  return (
+    <div className="py-10 text-center text-sm text-zinc-500">
+      No data yet — be the first to check your connection!
+    </div>
+  );
+}
+
+function LoadingState() {
+  return (
+    <div className="py-10 text-center text-sm text-zinc-500">Loading...</div>
+  );
+}
+
 export default function LiveDashboard() {
-  const [stats, setStats] = useState<StatRow[]>([]);
+  const [serviceStats, setServiceStats] = useState<ServiceStatRow[]>([]);
+  const [ispStats, setIspStats] = useState<IspStatRow[]>([]);
   const [totalChecks, setTotalChecks] = useState(0);
   const [selectedIsp, setSelectedIsp] = useState('');
   const [isps, setIsps] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<Tab>('service');
 
   const fetchStats = useCallback(async (isp = '') => {
     const params = isp ? `?isp=${encodeURIComponent(isp)}` : '';
     const res = await fetch(`/api/stats${params}`);
     if (!res.ok) return;
     const data = await res.json();
-    setStats(data.stats);
-    setTotalChecks(data.totalChecks);
-
+    setServiceStats(data.serviceStats ?? []);
+    setIspStats(data.ispStats ?? []);
+    setTotalChecks(data.totalChecks ?? 0);
     if (!isp) {
-      const unique = [...new Set((data.stats as StatRow[]).map((r) => r.isp))].sort();
+      const unique = [...new Set((data.ispStats as IspStatRow[]).map((r) => r.isp))].sort();
       setIsps(unique);
     }
     setLoading(false);
   }, []);
 
-  useEffect(() => {
-    fetchStats(selectedIsp);
-  }, [selectedIsp, fetchStats]);
+  useEffect(() => { fetchStats(selectedIsp); }, [selectedIsp, fetchStats]);
 
   useEffect(() => {
     const supabase = createBrowserClient();
@@ -79,13 +113,12 @@ export default function LiveDashboard() {
         fetchStats(selectedIsp);
       })
       .subscribe();
-
     return () => { supabase.removeChannel(channel); };
   }, [selectedIsp, fetchStats]);
 
   return (
     <div className="space-y-4">
-      {/* Header row */}
+      {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="text-sm text-zinc-400">
           <span className="font-semibold text-zinc-200">{totalChecks.toLocaleString()}</span>{' '}
@@ -95,80 +128,130 @@ export default function LiveDashboard() {
             live
           </span>
         </div>
-        <ISPFilter isps={isps} selected={selectedIsp} onChange={setSelectedIsp} />
-      </div>
-
-      {/* Mobile: card list */}
-      <div className="block sm:hidden">
-        {loading ? (
-          <div className="rounded-lg border border-zinc-700 px-4 py-8 text-center text-sm text-zinc-500">
-            Loading...
-          </div>
-        ) : stats.length === 0 ? (
-          <div className="rounded-lg border border-zinc-700 px-4 py-8 text-center text-sm text-zinc-500">
-            No data yet — be the first to check your connection!
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {stats.map((row, i) => (
-              <div
-                key={`${row.service_name}-${row.isp}-${i}`}
-                className="rounded-lg border border-zinc-700 bg-zinc-800/30 p-3"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-medium text-zinc-200">{row.service_name}</span>
-                  <BlockedBadge pct={Number(row.blocked_pct)} />
-                </div>
-                <div className="mt-1.5 flex items-center justify-between text-xs text-zinc-500">
-                  <span className="truncate max-w-[200px]">{row.isp}</span>
-                  <span>{timeAgo(row.last_checked)}</span>
-                </div>
-              </div>
-            ))}
-          </div>
+        {tab === 'isp' && (
+          <ISPFilter isps={isps} selected={selectedIsp} onChange={setSelectedIsp} />
         )}
       </div>
 
-      {/* Desktop: table */}
-      <div className="hidden sm:block overflow-x-auto rounded-lg border border-zinc-700">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-zinc-700 bg-zinc-800/80">
-              <th className="px-4 py-3 text-left font-medium text-zinc-400">Service</th>
-              <th className="px-4 py-3 text-left font-medium text-zinc-400">ISP</th>
-              <th className="px-4 py-3 text-left font-medium text-zinc-400">Blocked %</th>
-              <th className="px-4 py-3 text-left font-medium text-zinc-400">Checks</th>
-              <th className="px-4 py-3 text-left font-medium text-zinc-400">Last seen</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-800">
-            {loading ? (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-zinc-500">Loading...</td>
-              </tr>
-            ) : stats.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-zinc-500">
-                  No data yet — be the first to check your connection!
-                </td>
-              </tr>
-            ) : (
-              stats.map((row, i) => (
-                <tr
-                  key={`${row.service_name}-${row.isp}-${i}`}
-                  className="transition-colors hover:bg-zinc-800/40"
-                >
-                  <td className="px-4 py-3 font-medium text-zinc-200">{row.service_name}</td>
-                  <td className="px-4 py-3 text-zinc-400">{row.isp}</td>
-                  <td className="px-4 py-3"><BlockedBadge pct={Number(row.blocked_pct)} /></td>
-                  <td className="px-4 py-3 text-zinc-400">{row.total_checks}</td>
-                  <td className="px-4 py-3 text-zinc-500">{timeAgo(row.last_checked)}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+      {/* Tabs */}
+      <div className="flex gap-1 rounded-lg border border-zinc-700 bg-zinc-900 p-1">
+        <button
+          onClick={() => setTab('service')}
+          className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+            tab === 'service'
+              ? 'bg-zinc-700 text-zinc-100'
+              : 'text-zinc-500 hover:text-zinc-300'
+          }`}
+        >
+          By Service
+        </button>
+        <button
+          onClick={() => setTab('isp')}
+          className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+            tab === 'isp'
+              ? 'bg-zinc-700 text-zinc-100'
+              : 'text-zinc-500 hover:text-zinc-300'
+          }`}
+        >
+          By ISP
+        </button>
       </div>
+
+      {/* By Service tab — always 10 rows */}
+      {tab === 'service' && (
+        <div className="rounded-lg border border-zinc-700 overflow-hidden">
+          {loading ? (
+            <LoadingState />
+          ) : serviceStats.length === 0 ? (
+            <EmptyState />
+          ) : (
+            <>
+              {/* Mobile cards */}
+              <div className="block sm:hidden divide-y divide-zinc-800">
+                {serviceStats.map((row) => (
+                  <div key={row.service_name} className="flex items-center justify-between px-4 py-3">
+                    <div>
+                      <div className="text-sm font-medium text-zinc-200">{row.service_name}</div>
+                      <div className="mt-1 text-xs text-zinc-500">{row.total_checks} checks · {timeAgo(row.last_checked)}</div>
+                    </div>
+                    <BlockedBadge pct={Number(row.blocked_pct)} />
+                  </div>
+                ))}
+              </div>
+              {/* Desktop table */}
+              <table className="hidden w-full text-sm sm:table">
+                <thead>
+                  <tr className="border-b border-zinc-700 bg-zinc-800/80">
+                    <th className="px-4 py-3 text-left font-medium text-zinc-400">Service</th>
+                    <th className="px-4 py-3 text-left font-medium text-zinc-400">Blocked rate</th>
+                    <th className="px-4 py-3 text-left font-medium text-zinc-400">Reports</th>
+                    <th className="px-4 py-3 text-left font-medium text-zinc-400">Last seen</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-800">
+                  {serviceStats.map((row) => (
+                    <tr key={row.service_name} className="hover:bg-zinc-800/40 transition-colors">
+                      <td className="px-4 py-3 font-medium text-zinc-200">{row.service_name}</td>
+                      <td className="px-4 py-3"><BlockedBar pct={Number(row.blocked_pct)} /></td>
+                      <td className="px-4 py-3 text-zinc-400">{row.total_checks}</td>
+                      <td className="px-4 py-3 text-zinc-500">{timeAgo(row.last_checked)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* By ISP tab */}
+      {tab === 'isp' && (
+        <div className="rounded-lg border border-zinc-700 overflow-hidden">
+          {loading ? (
+            <LoadingState />
+          ) : ispStats.length === 0 ? (
+            <EmptyState />
+          ) : (
+            <>
+              {/* Mobile cards */}
+              <div className="block sm:hidden divide-y divide-zinc-800">
+                {ispStats.map((row, i) => (
+                  <div key={`${row.service_name}-${row.isp}-${i}`} className="px-4 py-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-zinc-200">{row.service_name}</span>
+                      <BlockedBadge pct={Number(row.blocked_pct)} />
+                    </div>
+                    <div className="mt-1 truncate text-xs text-zinc-500">{row.isp}</div>
+                  </div>
+                ))}
+              </div>
+              {/* Desktop table */}
+              <table className="hidden w-full text-sm sm:table">
+                <thead>
+                  <tr className="border-b border-zinc-700 bg-zinc-800/80">
+                    <th className="px-4 py-3 text-left font-medium text-zinc-400">Service</th>
+                    <th className="px-4 py-3 text-left font-medium text-zinc-400">ISP</th>
+                    <th className="px-4 py-3 text-left font-medium text-zinc-400">Blocked %</th>
+                    <th className="px-4 py-3 text-left font-medium text-zinc-400">Checks</th>
+                    <th className="px-4 py-3 text-left font-medium text-zinc-400">Last seen</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-800">
+                  {ispStats.map((row, i) => (
+                    <tr key={`${row.service_name}-${row.isp}-${i}`} className="hover:bg-zinc-800/40 transition-colors">
+                      <td className="px-4 py-3 font-medium text-zinc-200">{row.service_name}</td>
+                      <td className="px-4 py-3 text-zinc-400">{row.isp}</td>
+                      <td className="px-4 py-3"><BlockedBadge pct={Number(row.blocked_pct)} /></td>
+                      <td className="px-4 py-3 text-zinc-400">{row.total_checks}</td>
+                      <td className="px-4 py-3 text-zinc-500">{timeAgo(row.last_checked)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

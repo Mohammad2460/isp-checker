@@ -7,30 +7,43 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const ispFilter = searchParams.get('isp');
 
-    let query = supabase
+    // By-service aggregate (always 10 rows max)
+    const { data: serviceStats, error: serviceError } = await supabase
+      .from('service_stats')
+      .select('*')
+      .order('blocked_pct', { ascending: false });
+
+    if (serviceError) {
+      console.error('Service stats error:', serviceError);
+      return NextResponse.json({ error: 'Database error' }, { status: 500 });
+    }
+
+    // By-ISP breakdown (filterable)
+    let ispQuery = supabase
       .from('service_isp_stats')
       .select('*')
       .order('blocked_pct', { ascending: false });
 
     if (ispFilter) {
-      query = query.ilike('isp', `%${ispFilter}%`);
+      ispQuery = ispQuery.ilike('isp', `%${ispFilter}%`);
     }
 
-    const { data: stats, error } = await query;
+    const { data: ispStats, error: ispError } = await ispQuery;
 
-    if (error) {
-      console.error('Stats query error:', error);
+    if (ispError) {
+      console.error('ISP stats error:', ispError);
       return NextResponse.json({ error: 'Database error' }, { status: 500 });
     }
 
-    // Count total checks in last 24h
+    // Total checks in last 24h
     const { count } = await supabase
       .from('checks')
       .select('*', { count: 'exact', head: true })
       .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
 
     return NextResponse.json({
-      stats: stats ?? [],
+      serviceStats: serviceStats ?? [],
+      ispStats: ispStats ?? [],
       totalChecks: count ?? 0,
       lastUpdated: new Date().toISOString(),
     });
